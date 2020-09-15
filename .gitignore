@@ -1,0 +1,9 @@
+*~
+*.swp
+*.bak
+*.csv
+*.xls
+*.xlsx
+*.props
+output/
+data/
