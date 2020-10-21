@@ -1,5 +1,5 @@
 # Project: adams
-# Date: 2020-10-21 14:46:39
+# Date: 2020-10-21 16:55:19
 # User: fracpete
 # Charset: UTF-8
 # Modules: adams-access,adams-compress,adams-core,adams-db,adams-event,adams-excel,adams-groovy,adams-imaging,adams-imaging-boofcv,adams-imaging-imagemagick,adams-imaging-openimaj,adams-json,adams-jython,adams-math,adams-meta,adams-ml,adams-net,adams-odf,adams-pdf,adams-python,adams-rsync,adams-spreadsheet,adams-timeseries,adams-visualstats,adams-weka,adams-xml,adams-yaml
@@ -21,14 +21,14 @@ adams.flow.control.Flow -flow-execution-listener adams.flow.execution.NullListen
  adams.flow.source.Start
  adams.flow.control.Trigger -name "prompt user"
   adams.flow.standalone.SetVariable -name "restore file" -var-name restore -var-value @{flow_filename_long}.props -value-type FILE_FORWARD_SLASHES -expand-value true
-  adams.flow.source.EnterManyValues -stop-if-canceled true -value "adams.flow.source.valuedefinition.FileValueDefinition -name input_file -display \"Input file\" -extension csv -use-forward-slashes true" -value "adams.flow.source.valuedefinition.DefaultValueDefinition -name folder_name_regexp -display \"Folder name filter (regexp)\" -help \"The regular expression to use for filtering the data before processing it\" -type REGEXP -default-value .*" -value "adams.flow.source.valuedefinition.DirectoryValueDefinition -name output_dir -display \"Output directory\" -file-chooser-title \"Output dir\" -use-forward-slashes true" -output-type MAP -restoration-enabled true -restoration-file @{restore}
+  adams.flow.source.EnterManyValues -stop-if-canceled true -value "adams.flow.source.valuedefinition.FileValueDefinition -name input_file -display \"Input file\" -extension csv -use-forward-slashes true" -value "adams.flow.source.valuedefinition.DefaultValueDefinition -name folder_name_regexp -display \"Folder name filter (regexp)\" -help \"The regular expression to use for filtering the data before processing it\" -type REGEXP -default-value .*" -value "adams.flow.source.valuedefinition.DefaultValueDefinition -name top_x -display \"Size of \\\"Top X\\\" lists\" -type INTEGER -default-value 10" -value "adams.flow.source.valuedefinition.DirectoryValueDefinition -name output_dir -display \"Output directory\" -file-chooser-title \"Output dir\" -use-forward-slashes true" -output-type MAP -restoration-enabled true -restoration-file @{restore}
   adams.flow.transformer.MapToVariables
  adams.flow.control.Trigger -name "accepted viewing types"
   adams.flow.source.StringConstants -output-array true -string Interactive_Desktop_On_Demand -conversion adams.data.conversion.StringToString
   adams.flow.transformer.HashSetInit -storage-name viewing_types -conversion adams.data.conversion.ObjectToObject
  adams.flow.control.Trigger -name process
   adams.flow.source.Variable -var-name input_file -conversion adams.data.conversion.StringToString
-  adams.flow.transformer.SpreadSheetFileReader -reader "adams.data.io.input.CsvSpreadSheetReader -data-row-type adams.data.spreadsheet.DenseDataRow -spreadsheet-type adams.data.spreadsheet.DefaultSpreadSheet -text-columns 2,3-8,10 -datetime-format \"M/d/yyyy h:mm:ss a\" -datetime-lenient true -datetimemsec-columns 9 -parse-formulas false"
+  adams.flow.transformer.SpreadSheetFileReader -reader "adams.data.io.input.CsvSpreadSheetReader -data-row-type adams.data.spreadsheet.DenseDataRow -spreadsheet-type adams.data.spreadsheet.DefaultSpreadSheet -text-columns 2,3-8,10 -datetime-columns 1 -datetime-format \"M/d/yyyy h:mm:ss a\" -datetimemsec-columns 9 -parse-formulas false"
   adams.flow.control.ConditionalSubProcess -name "filter by folder name" -condition "adams.flow.condition.bool.Expression -expression \"\\\\\\\"@{folder_name_regexp}\\\\\\\" != \\\\\\\".*\\\\\\\"\""
    adams.flow.transformer.SpreadSheetRowFilter -finder "adams.data.spreadsheet.rowfinder.ByValue -att-index 5 -reg-exp @{folder_name_regexp}"
   adams.flow.transformer.SetStorageValue -storage-name data
@@ -147,6 +147,36 @@ adams.flow.control.Flow -flow-execution-listener adams.flow.execution.NullListen
      adams.flow.source.StorageValue -storage-name stats -conversion adams.data.conversion.UnknownToUnknown
      adams.flow.transformer.SpreadSheetSetCell -name user -no-copy true -row last -col User -finder adams.data.spreadsheet.cellfinder.CellRange -value @{user} -force-string true
      adams.flow.transformer.SpreadSheetSetCell -name #rows -no-copy true -row last -col Sessions -finder adams.data.spreadsheet.cellfinder.CellRange -value @{sessions}
+   adams.flow.control.Tee -name "top x"
+    adams.flow.transformer.SetVariable -name row_range -var-name row_range -var-value 1-@{top_x} -expand-value true
+    adams.flow.control.Tee -name "# views"
+     adams.flow.transformer.SetVariable -name "stats file" -var-name stats_file -var-value @{output_dir}/top_@{top_x}_views-@{folder_name}-@{viewing_type}.csv -value-type FILE_FORWARD_SLASHES -expand-value true
+     adams.flow.transformer.SpreadSheetInsertColumn -position 4 -value 1
+     adams.flow.transformer.SpreadSheetAggregate -key-columns 3 -aggregate-columns 4
+     adams.flow.transformer.SpreadSheetSetHeaderCell -no-copy true -col 2 -value Views
+     adams.flow.transformer.SpreadSheetSort -no-copy true -sort-column 2 -sort-order false
+     adams.flow.control.ConditionalSubProcess -condition "adams.flow.condition.bool.HasRows -num-rows @{top_x}"
+      adams.flow.transformer.SpreadSheetSubset -row @{row_range}
+     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
+    adams.flow.control.Tee -name sum(minutes)
+     adams.flow.transformer.SetVariable -name "stats file" -var-name stats_file -var-value @{output_dir}/top_@{top_x}_minutes-@{folder_name}-@{viewing_type}.csv -value-type FILE_FORWARD_SLASHES -expand-value true
+     adams.flow.transformer.SpreadSheetAggregate -key-columns 3 -aggregate-columns 9
+     adams.flow.transformer.SpreadSheetSetHeaderCell -no-copy true -col 2 -value Minutes
+     adams.flow.transformer.SpreadSheetSort -no-copy true -sort-column 2 -sort-order false
+     adams.flow.control.ConditionalSubProcess -condition "adams.flow.condition.bool.HasRows -num-rows @{top_x}"
+      adams.flow.transformer.SpreadSheetSubset -row @{row_range}
+     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
+    adams.flow.control.Tee -name "# viewers"
+     adams.flow.transformer.SetVariable -name "stats file" -var-name stats_file -var-value @{output_dir}/top_@{top_x}_viewers-@{folder_name}-@{viewing_type}.csv -value-type FILE_FORWARD_SLASHES -expand-value true
+     adams.flow.transformer.SpreadSheetInsertColumn -position 4 -value 1
+     adams.flow.transformer.SpreadSheetAggregate -key-columns 3,7 -aggregate-columns 4
+     adams.flow.transformer.SpreadSheetSetCell -row 1-last -col 3 -finder adams.data.spreadsheet.cellfinder.CellRange -value 1
+     adams.flow.transformer.SpreadSheetAggregate -name "SpreadSheetAggregate (2)" -key-columns 1 -aggregate-columns 3
+     adams.flow.transformer.SpreadSheetSetHeaderCell -no-copy true -col 2 -value Viewers
+     adams.flow.transformer.SpreadSheetSort -no-copy true -sort-column 2 -sort-order false
+     adams.flow.control.ConditionalSubProcess -condition "adams.flow.condition.bool.HasRows -num-rows @{top_x}"
+      adams.flow.transformer.SpreadSheetSubset -row @{row_range}
+     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
    adams.flow.control.Tee -name "user matrix"
     adams.flow.transformer.SpreadSheetSubsetByValue -name "by session id" -col 2
     adams.flow.control.Trigger -name "add user matrix row - sessions"
@@ -242,6 +272,36 @@ adams.flow.control.Flow -flow-execution-listener adams.flow.execution.NullListen
    adams.flow.control.Trigger -name "init sheet"
     adams.flow.source.NewSpreadSheet -columns User,Sessions,Min,Max,Mean,Median,StdDev -data-row-type adams.data.spreadsheet.DenseDataRow -spreadsheet-type adams.data.spreadsheet.DefaultSpreadSheet
     adams.flow.transformer.SetStorageValue -storage-name stats
+   adams.flow.control.Tee -name "viewing percentage" -annotation "uses longest time watches as 100% of video length"
+    adams.flow.transformer.SpreadSheetSort -no-copy true -sort-column 9
+    adams.flow.control.Tee -name max
+     adams.flow.transformer.SpreadSheetGetCell -row last -col 9
+     adams.flow.transformer.SetVariable -var-name length
+    adams.flow.transformer.Convert -conversion "adams.data.conversion.SpreadSheetAddFormulaColumn -header Percentage -formula =I@/@{length}*100 -expand-variables true"
+    adams.flow.transformer.SpreadSheetSort -name "SpreadSheetSort (2)" -sort-column 11
+    adams.flow.transformer.SpreadSheetSubset -col 3,5,8,9,11
+    adams.flow.control.Tee -name output
+     adams.flow.transformer.SetVariable -var-name stats_file -var-value @{output_dir}/viewing_length_perc-@{folder_name}-@{session_name}-@{viewing_type}.csv -value-type FILE_FORWARD_SLASHES -expand-value true
+     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
+    adams.flow.control.Tee -name plot
+     adams.flow.transformer.SetVariable -var-name plot_file -var-value @{output_dir}/viewing_length_perc-@{folder_name}-@{session_name}-@{viewing_type}.png -value-type FILE_FORWARD_SLASHES -expand-value true
+     adams.flow.transformer.SetVariable -name "SetVariable (2)" -var-name title -var-value "Viewing length % - @{folder_name_raw} - @{session_name_raw}" -expand-value true
+     adams.flow.sink.JFreeChartFileWriter -output @{plot_file} -dataset "adams.gui.visualization.jfreechart.dataset.DefaultXY -x \"\" -y last" -chart "adams.gui.visualization.jfreechart.chart.ScatterPlot -title @{title} -label-x \"viewer (sorted by percentage)\" -label-y percentage" -shape adams.gui.visualization.jfreechart.shape.Default -color-provider adams.gui.visualization.core.DefaultColorProvider -writer adams.data.io.output.JAIImageWriter
+   adams.flow.control.Tee -name "views per day" -skip true
+    adams.flow.transformer.SetVariable -name stats_file -var-name stats_file -var-value @{output_dir}/views_per_day-@{folder_name}-@{session_name}-@{viewing_type}.csv -value-type FILE_FORWARD_SLASHES -expand-value true
+    adams.flow.transformer.SetVariable -name plot_file -var-name plot_file -var-value @{output_dir}/views_per_day-@{folder_name}-@{session_name}-@{viewing_type}.png -value-type FILE_FORWARD_SLASHES -expand-value true
+    adams.flow.transformer.SpreadSheetSort
+    adams.flow.transformer.SpreadSheetCopyColumns -columns 1 -position 2 -prefix Date
+    adams.flow.transformer.SpreadSheetSetHeaderCell -col 2 -value Date
+    adams.flow.transformer.SpreadSheetConvertCells -finder "adams.data.spreadsheet.cellfinder.CellRange -columns 2" -conversion "adams.data.conversion.StringExpression -expression \"left(X, 10)\""
+    adams.flow.transformer.SpreadSheetInsertColumn -no-copy true -position 2 -after true -header Views -value 1
+    adams.flow.transformer.SpreadSheetAggregate -key-columns 2 -aggregate-columns 3
+    adams.flow.transformer.SpreadSheetSetHeaderCell -name "SpreadSheetSetHeaderCell (2)" -no-copy true -col 2 -value Views
+    adams.flow.control.Tee -name output
+     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
+    adams.flow.control.Tee -name plot
+     adams.flow.transformer.SetVariable -name title -var-name title -var-value "Views per day - @{folder_name}" -expand-value true
+     adams.flow.sink.JFreeChartFileWriter -output @{plot_file} -dataset adams.gui.visualization.jfreechart.dataset.DefaultCategory -chart "adams.gui.visualization.jfreechart.chart.BarChart -title @{title} -legend true -label-x date -label-y \"# views\"" -shape adams.gui.visualization.jfreechart.shape.Default -color-provider adams.gui.visualization.core.DefaultColorProvider -width 1200 -writer adams.data.io.output.JAIImageWriter
    adams.flow.control.Tee -name "process subset"
     adams.flow.transformer.SpreadSheetSubsetByValue -name "by user name" -col 6
     adams.flow.control.Tee -name user
