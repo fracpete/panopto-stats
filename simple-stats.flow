@@ -1,5 +1,5 @@
 # Project: adams
-# Date: 2020-09-15 11:31:38
+# Date: 2020-10-21 14:46:39
 # User: fracpete
 # Charset: UTF-8
 # Modules: adams-access,adams-compress,adams-core,adams-db,adams-event,adams-excel,adams-groovy,adams-imaging,adams-imaging-boofcv,adams-imaging-imagemagick,adams-imaging-openimaj,adams-json,adams-jython,adams-math,adams-meta,adams-ml,adams-net,adams-odf,adams-pdf,adams-python,adams-rsync,adams-spreadsheet,adams-timeseries,adams-visualstats,adams-weka,adams-xml,adams-yaml
@@ -193,15 +193,19 @@ adams.flow.control.Flow -flow-execution-listener adams.flow.execution.NullListen
     adams.flow.standalone.SetVariable -var-name stats_file -var-value @{output_dir}/usermatrix-@{folder_name}-@{viewing_type}-sessions.csv -value-type FILE_FORWARD_SLASHES -expand-value true
     adams.flow.source.StorageValue -storage-name user_stats_sessions -conversion adams.data.conversion.UnknownToUnknown
     adams.flow.transformer.SpreadSheetSort -sort-column 1 -sort-column 2 -sort-order true -sort-order true
-    adams.flow.transformer.Convert -name "add sum" -conversion "adams.data.conversion.SpreadSheetAddSumRow -columns 3-last"
+    adams.flow.transformer.Convert -name "add sum row" -conversion "adams.data.conversion.SpreadSheetAddSumRow -columns 3-last"
+    adams.flow.transformer.Convert -name "add sum col" -conversion "adams.data.conversion.SpreadSheetAddSumColumn -header Total -rows 1-last_1"
     adams.flow.transformer.Convert -name "materialize sums" -conversion "adams.data.conversion.SpreadSheetMaterializeFormulas -finder adams.data.spreadsheet.cellfinder.CellRange"
+    adams.flow.transformer.SpreadSheetReorderColumns -order 1,2,last,3-last_1
     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
    adams.flow.control.Trigger -name "output user matrix - minutes"
     adams.flow.standalone.SetVariable -var-name stats_file -var-value @{output_dir}/usermatrix-@{folder_name}-@{viewing_type}-minutes.csv -value-type FILE_FORWARD_SLASHES -expand-value true
     adams.flow.source.StorageValue -storage-name user_stats_minutes -conversion adams.data.conversion.UnknownToUnknown
     adams.flow.transformer.SpreadSheetSort -sort-column 1 -sort-column 2 -sort-order true -sort-order true
-    adams.flow.transformer.Convert -name "add sum" -conversion "adams.data.conversion.SpreadSheetAddSumRow -columns 3-last"
+    adams.flow.transformer.Convert -name "add sum row" -conversion "adams.data.conversion.SpreadSheetAddSumRow -columns 3-last"
+    adams.flow.transformer.Convert -name "add sum col" -conversion "adams.data.conversion.SpreadSheetAddSumColumn -header Total -rows 1-last_1"
     adams.flow.transformer.Convert -name "materialize sums" -conversion "adams.data.conversion.SpreadSheetMaterializeFormulas -finder adams.data.spreadsheet.cellfinder.CellRange"
+    adams.flow.transformer.SpreadSheetReorderColumns -order 1,2,last,3-last_1
     adams.flow.sink.SpreadSheetFileWriter -output @{stats_file} -writer adams.data.io.output.CsvSpreadSheetWriter
    adams.flow.control.Trigger -name plot
     adams.flow.source.StringConstants -string Sessions -string Median -conversion adams.data.conversion.StringToString
